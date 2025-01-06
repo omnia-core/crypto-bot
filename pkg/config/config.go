@@ -16,6 +16,7 @@ type Config struct {
 type UpbitConfig struct {
 	AccessKey string `yaml:"accessKey"`
 	SecretKey string `yaml:"secretKey"`
+	BaseURL   string `yaml:"baseURL"`
 }
 
 func ParseConfig() *Config {
