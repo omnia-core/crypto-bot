@@ -12,17 +12,28 @@ func main() {
 	fmt.Println(cfg)
 
 	upbitClient := upbit.New(cfg)
-	balances, err := upbitClient.GetBalances()
+	balances, err := upbitClient.ListAccounts()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(string(balances))
+	fmt.Println(balances)
 
-	marketAll, err := upbitClient.GetMarketAll()
+	marketAll, err := upbitClient.GetMarketAll(upbit.MarketAllRequest{})
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(string(marketAll))
+	fmt.Println(marketAll)
+
+	candles, err := upbitClient.ListMinuteCandles(upbit.ListCandlesRequest{
+		Market:  "KRW-XRP",
+		Minutes: 5,
+		Count:   1,
+	})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(candles)
 }

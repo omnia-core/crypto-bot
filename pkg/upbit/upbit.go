@@ -2,6 +2,7 @@ package upbit
 
 import (
 	"crypto-bot/pkg/config"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,8 +12,9 @@ import (
 )
 
 type Client interface {
-	GetBalances() ([]byte, error)
-	GetMarketAll() ([]byte, error)
+	ListAccounts() (AccountsResponse, error)
+	GetMarketAll(request MarketAllRequest) (MarketsResponse, error)
+	ListMinuteCandles(request ListCandlesRequest) (CandlesResponse, error)
 }
 
 type client struct {
@@ -31,12 +33,63 @@ func New(cfg *config.Config) Client {
 	}
 }
 
-func (c *client) GetBalances() ([]byte, error) {
-	return c.sendRequest("GET", "/accounts", nil)
+func (c *client) ListAccounts() (AccountsResponse, error) {
+	resp, err := c.sendRequest("GET", "/accounts", nil)
+	if err != nil {
+		return AccountsResponse{}, err
+	}
+
+	var accounts AccountsResponse
+	err = json.Unmarshal(resp, &accounts)
+	if err != nil {
+		return AccountsResponse{}, err
+	}
+
+	return accounts, nil
 }
 
-func (c *client) GetMarketAll() ([]byte, error) {
-	return c.sendRequest("GET", "/market/all", nil)
+// GetMarketAll 종목 코드 조회
+func (c *client) GetMarketAll(request MarketAllRequest) (MarketsResponse, error) {
+	resp, err := c.sendRequest("GET", "/market/all", nil)
+	if err != nil {
+		return MarketsResponse{}, err
+	}
+
+	var markets MarketsResponse
+	err = json.Unmarshal(resp, &markets)
+	if err != nil {
+		return MarketsResponse{}, err
+	}
+
+	return markets, nil
+}
+
+// ListMinuteCandles 캔들 조회 - 분(Minute) 캔들 조회
+func (c *client) ListMinuteCandles(request ListCandlesRequest) (CandlesResponse, error) {
+	if err := request.valid(); err != nil {
+		return CandlesResponse{}, err
+	}
+
+	params := map[string]string{
+		"market": request.Market,
+		"count":  fmt.Sprintf("%d", request.Count),
+	}
+	if request.To != nil {
+		params["to"] = request.To.Format(time.RFC3339)
+	}
+
+	resp, err := c.sendRequest("GET", fmt.Sprintf("/candles/minutes/%d", request.Minutes), params)
+	if err != nil {
+		return CandlesResponse{}, err
+	}
+
+	var candles CandlesResponse
+	err = json.Unmarshal(resp, &candles)
+	if err != nil {
+		return CandlesResponse{}, err
+	}
+
+	return candles, nil
 }
 
 func (c *client) sendRequest(method string, path string, request interface{}) ([]byte, error) {
