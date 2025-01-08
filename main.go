@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto-bot/internal/trade"
 	"crypto-bot/pkg/config"
 	"crypto-bot/pkg/upbit"
 	"fmt"
@@ -36,4 +37,8 @@ func main() {
 		return
 	}
 	fmt.Println(candles)
+
+	trader := trade.NewTrader(upbitClient)
+
+	trader.Run()
 }
