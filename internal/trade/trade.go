@@ -1,10 +1,11 @@
 package trade
 
 import (
+	"crypto-bot/pkg/log"
 	"crypto-bot/pkg/upbit"
 	"fmt"
-	"log"
 	"math"
+	"time"
 )
 
 type Trader interface {
@@ -25,30 +26,56 @@ func (t trader) Run() {
 	market := "KRW-XRP" // Replace with the desired market (e.g., KRW-XRP)
 	period := 20        // Lookback period for SMA and Bollinger Bands
 
-	// Fetch historical prices from Upbit
-	candles, err := t.client.ListMinuteCandles(upbit.ListCandlesRequest{
-		Minutes: 5,
-		Market:  market,
-		Count:   200,
-	})
-	if err != nil {
-		log.Fatalf("Failed to fetch historical prices: %v", err)
-	}
-	prices := make([]float64, len(candles))
-	for i, candle := range candles {
-		prices[i] = candle.TradePrice
-	}
-	// Process data and calculate signals
-	for i := period; i < len(prices); i++ {
-		mean, stdDev := t.calculateMeanAndStdDev(prices[:i], period)
-		signal := generateSignal(prices[i], mean, stdDev)
+	logger := log.New()
 
-		// Print results
-		fmt.Printf("Price: %.2f | SMA: %.2f | StdDev: %.2f | Signal: %d\n",
-			prices[i], mean, stdDev, signal)
-	}
+	for {
+		// Fetch historical prices
+		candles, err := t.client.ListMinuteCandles(upbit.ListCandlesRequest{
+			Market:  market,
+			Minutes: 5,
+			Count:   200,
+		})
+		if err != nil {
+			logger.Errorf("Error fetching candles: %v", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
 
-	// Example of executing trades (not implemented here)
+		prices := candles.ToTradePricesSlice()
+
+		// Calculate mean and standard deviation
+		mean, stdDev := t.calculateMeanAndStdDev(prices, period)
+
+		// Check the latest price and generate a signal
+		latestPrice := prices[0]
+		signal := generateSignal(latestPrice, mean, stdDev)
+
+		if signal == 1 {
+			// Buy Signal
+			fmt.Println("Buy signal detected!")
+			//orderResp, err := client.placeOrder(market, "bid", "0.01", fmt.Sprintf("%.2f", latestPrice), "limit")
+			//if err != nil {
+			//	//log.Printf("Error placing buy order: %v", err)
+			//} else {
+			//	fmt.Printf("Buy order placed: %s\n", orderResp)
+			//}
+		} else if signal == -1 {
+			// Sell Signal
+			fmt.Println("Sell signal detected!")
+			//orderResp, err := client.placeOrder(market, "ask", "0.01", fmt.Sprintf("%.2f", latestPrice), "limit")
+			//if err != nil {
+			//	//log.Printf("Error placing sell order: %v", err)
+			//} else {
+			//	fmt.Printf("Sell order placed: %s\n", orderResp)
+			//}
+		} else {
+			fmt.Println("No trade signal. Holding...")
+		}
+
+		// Wait before fetching the next set of data
+		//time.Sleep(60 * time.Second) // Wait 1 minute before next iteration
+		time.Sleep(1 * time.Second) // Wait 1 second before next iteration
+	}
 }
 
 func (t trader) calculateMeanAndStdDev(prices []float64, period int) (float64, float64) {

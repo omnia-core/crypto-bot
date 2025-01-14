@@ -69,3 +69,11 @@ type CandleResponse struct {
 }
 
 type CandlesResponse []CandleResponse
+
+func (r CandlesResponse) ToTradePricesSlice() []float64 {
+	prices := make([]float64, len(r))
+	for i, candle := range r {
+		prices[i] = candle.TradePrice
+	}
+	return prices
+}
