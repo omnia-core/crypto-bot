@@ -7,6 +7,10 @@ func (e OmniaError) Error() string {
 }
 
 const (
-	ErrInvalidMinutes OmniaError = "invalid minutes"
-	ErrInvalidMarket  OmniaError = "invalid market"
+	ErrInvalidMinutes   OmniaError = "invalid minutes"
+	ErrInvalidMarket    OmniaError = "invalid market"
+	ErrInvalidSide      OmniaError = "invalid side"
+	ErrInvalidVolume    OmniaError = "invalid volume"
+	ErrInvalidPrice     OmniaError = "invalid price"
+	ErrInvalidOrderType OmniaError = "invalid order type"
 )

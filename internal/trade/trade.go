@@ -30,7 +30,7 @@ func (t trader) Run() {
 
 	for {
 		// Fetch historical prices
-		candles, err := t.client.ListMinuteCandles(upbit.ListCandlesRequest{
+		candles, err := t.client.ListMinuteCandles(upbit.ListCandlesParams{
 			Market:  market,
 			Minutes: 5,
 			Count:   200,
@@ -48,26 +48,38 @@ func (t trader) Run() {
 
 		// Check the latest price and generate a signal
 		latestPrice := prices[0]
-		signal := generateSignal(latestPrice, mean, stdDev)
+		signal := t.generateSignal(latestPrice, mean, stdDev)
 
 		if signal == 1 {
 			// Buy Signal
 			fmt.Println("Buy signal detected!")
-			//orderResp, err := client.placeOrder(market, "bid", "0.01", fmt.Sprintf("%.2f", latestPrice), "limit")
-			//if err != nil {
-			//	//log.Printf("Error placing buy order: %v", err)
-			//} else {
-			//	fmt.Printf("Buy order placed: %s\n", orderResp)
-			//}
+			order, err := t.client.PlaceOrder(upbit.PlaceOrderParams{
+				Market:    market,
+				Side:      "bid",
+				Volume:    "0.01",
+				Price:     fmt.Sprintf("%.2f", latestPrice),
+				OrderType: "limit",
+			})
+			if err != nil {
+				logger.Errorf("Error placing buy order: %v", err)
+			} else {
+				fmt.Printf("Buy order placed: %s\n", order)
+			}
 		} else if signal == -1 {
 			// Sell Signal
 			fmt.Println("Sell signal detected!")
-			//orderResp, err := client.placeOrder(market, "ask", "0.01", fmt.Sprintf("%.2f", latestPrice), "limit")
-			//if err != nil {
-			//	//log.Printf("Error placing sell order: %v", err)
-			//} else {
-			//	fmt.Printf("Sell order placed: %s\n", orderResp)
-			//}
+			order, err := t.client.PlaceOrder(upbit.PlaceOrderParams{
+				Market:    market,
+				Side:      "ask",
+				Volume:    "0.01",
+				Price:     fmt.Sprintf("%.2f", latestPrice),
+				OrderType: "limit",
+			})
+			if err != nil {
+				logger.Errorf("Error placing sell order: %v", err)
+			} else {
+				fmt.Printf("Sell order placed: %s\n", order)
+			}
 		} else {
 			fmt.Println("No trade signal. Holding...")
 		}
@@ -102,7 +114,7 @@ func (t trader) calculateMeanAndStdDev(prices []float64, period int) (float64, f
 }
 
 // generateSignal generates buy/sell signals based on Bollinger Bands
-func generateSignal(price, mean, stdDev float64) int {
+func (t trader) generateSignal(price, mean, stdDev float64) int {
 	upperBand := mean + 2*stdDev
 	lowerBand := mean - 2*stdDev
 

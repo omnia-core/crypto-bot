@@ -2,8 +2,11 @@ package upbit
 
 import (
 	"crypto-bot/pkg/config"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -12,9 +15,11 @@ import (
 )
 
 type Client interface {
-	ListAccounts() (AccountsResponse, error)
-	GetMarketAll(request MarketAllRequest) (MarketsResponse, error)
-	ListMinuteCandles(request ListCandlesRequest) (CandlesResponse, error)
+	ListAccounts() (Accounts, error)
+	GetMarketAll(request MarketAllParams) (Markets, error)
+	ListMinuteCandles(request ListCandlesParams) (Candles, error)
+
+	PlaceOrder(request PlaceOrderParams) (Order, error)
 }
 
 type client struct {
@@ -33,41 +38,41 @@ func New(cfg *config.Config) Client {
 	}
 }
 
-func (c *client) ListAccounts() (AccountsResponse, error) {
+func (c *client) ListAccounts() (Accounts, error) {
 	resp, err := c.sendRequest("GET", "/accounts", nil)
 	if err != nil {
-		return AccountsResponse{}, err
+		return Accounts{}, err
 	}
 
-	var accounts AccountsResponse
+	var accounts Accounts
 	err = json.Unmarshal(resp, &accounts)
 	if err != nil {
-		return AccountsResponse{}, err
+		return Accounts{}, err
 	}
 
 	return accounts, nil
 }
 
 // GetMarketAll 종목 코드 조회
-func (c *client) GetMarketAll(request MarketAllRequest) (MarketsResponse, error) {
+func (c *client) GetMarketAll(request MarketAllParams) (Markets, error) {
 	resp, err := c.sendRequest("GET", "/market/all", nil)
 	if err != nil {
-		return MarketsResponse{}, err
+		return Markets{}, err
 	}
 
-	var markets MarketsResponse
+	var markets Markets
 	err = json.Unmarshal(resp, &markets)
 	if err != nil {
-		return MarketsResponse{}, err
+		return Markets{}, err
 	}
 
 	return markets, nil
 }
 
 // ListMinuteCandles 캔들 조회 - 분(Minute) 캔들 조회
-func (c *client) ListMinuteCandles(request ListCandlesRequest) (CandlesResponse, error) {
+func (c *client) ListMinuteCandles(request ListCandlesParams) (Candles, error) {
 	if err := request.valid(); err != nil {
-		return CandlesResponse{}, err
+		return Candles{}, err
 	}
 
 	params := map[string]string{
@@ -80,20 +85,44 @@ func (c *client) ListMinuteCandles(request ListCandlesRequest) (CandlesResponse,
 
 	resp, err := c.sendRequest("GET", fmt.Sprintf("/candles/minutes/%d", request.Minutes), params)
 	if err != nil {
-		return CandlesResponse{}, err
+		return Candles{}, err
 	}
 
-	var candles CandlesResponse
+	var candles Candles
 	err = json.Unmarshal(resp, &candles)
 	if err != nil {
-		return CandlesResponse{}, err
+		return Candles{}, err
 	}
 
 	return candles, nil
 }
 
+func (c *client) PlaceOrder(request PlaceOrderParams) (Order, error) {
+	if err := request.valid(); err != nil {
+		return Order{}, err
+	}
+
+	body, err := json.Marshal(request)
+	if err != nil {
+		return Order{}, err
+	}
+
+	resp, err := c.sendRequest("POST", "/orders", body)
+	if err != nil {
+		return Order{}, err
+	}
+
+	var order Order
+	err = json.Unmarshal(resp, &order)
+	if err != nil {
+		return Order{}, err
+	}
+
+	return order, nil
+}
+
 func (c *client) sendRequest(method string, path string, request interface{}) ([]byte, error) {
-	token, err := c.getToken()
+	token, err := c.getToken(request)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +138,7 @@ func (c *client) sendRequest(method string, path string, request interface{}) ([
 			resp, err = c.client.R().Get(path)
 		}
 	case "POST":
-		resp, err = c.client.R().SetBody(request).Post(path)
+		resp, err = c.client.R().SetHeader("Content-Type", "application/json").SetBody(request).Post(path)
 	default:
 		return nil, fmt.Errorf("method %s not supported", method)
 	}
@@ -124,7 +153,7 @@ func (c *client) sendRequest(method string, path string, request interface{}) ([
 	return resp.Body(), nil
 }
 
-func (c *client) getToken() (string, error) {
+func (c *client) getToken(request interface{}) (string, error) {
 	id, err := uuid.NewV7()
 	if err != nil {
 		return "", err
@@ -134,6 +163,34 @@ func (c *client) getToken() (string, error) {
 		"nonce":      id.String(),
 	}
 
+	if request != nil {
+		queryHash := ""
+		switch r := request.(type) {
+		case map[string]string:
+			queryHash = sha512Hash(createQueryString(r))
+		case []byte:
+			queryHash = sha512Hash(string(r))
+		}
+		claims["query_hash"] = queryHash
+		claims["query_hash_alg"] = "SHA512"
+	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(c.cfg.Upbit.SecretKey))
+}
+
+// createQueryString converts a map into a URL-encoded query string
+func createQueryString(query map[string]string) string {
+	values := url.Values{}
+	for key, value := range query {
+		values.Add(key, value)
+	}
+	return values.Encode()
+}
+
+// sha512Hash generates a SHA512 hash of a string
+func sha512Hash(data string) string {
+	hash := sha512.New()
+	hash.Write([]byte(data))
+	return hex.EncodeToString(hash.Sum(nil))
 }
